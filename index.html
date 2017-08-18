@@ -1,0 +1,179 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="node_modules/bootstrap/dist/css/bootstrap.css" />
+    <style>
+        .main-container {
+            padding-top: 70px;
+        }
+
+        pre:empty {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <a class="navbar-brand" id="navTitle" href="#"></a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <div class="row">
+            <div class="col-xs-12">
+                <ul class="list-inline list-unstyled requests">
+                    <li><button type="button" id="login" class="btn btn-primary js-login">Login</button></li>
+                    <li><button type="button" id="logout" class="btn btn-danger js-logout">Logout</button></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-xs-6" id="scopeList">
+                <div class="panel panel-default">
+                    <div class="panel-heading">Select scopes</div>
+                    <div class="panel-body">
+                        <form id="checkboxForm">
+                        <div class="checkbox"><ul class="js-scopes" style="list-style-type:none; padding-left: 0px;"></ul></div>
+                        <div><button type="button" class="btn btn-default js-create">Create Token</button></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xs-6" id="userData">
+                <div class="panel panel-default">
+                    <div class="panel-heading">User data</div>
+                    <div class="panel-body">
+                        <pre class="js-user"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="node_modules/jquery/dist/jquery.js"></script>
+    <script src="node_modules/bootstrap/dist/js/bootstrap.js"></script>
+    <script src="node_modules/oidc-client/dist/oidc-client.js"></script>
+
+    <script src="configuration.js"></script>
+
+    <script>
+        $(document).ready(function() {
+            var title = settings.title;
+            document.title = title;
+            $("#navTitle").text(title);
+
+            if (!settings.debug) {
+                $('#userData').hide();
+            }
+
+            $('#scopeList').hide();
+            $('#logout').hide();
+            $('#login').show();
+        });
+
+        $(function(){
+            var scopes = settings.scope;
+            var match = scopes.split(' ');
+            for (var index in match) {
+                var variable = match[index];
+                $('.js-scopes').append('<li><label for="' + variable + '"><input class="Checkbox" type="checkbox" id="' + variable + '" value="' + variable + '"> ' + variable + '</label></li>');
+            }
+        });
+
+        // helper function to show data to the user
+        function display(selector, data) {
+            if (data && typeof data === 'string') {
+                data = JSON.parse(data);
+            }
+            if (data) {
+                data = JSON.stringify(data, null, 2);
+            }
+
+            $(selector).text(data);
+        }
+
+        function checkChecked() {
+            var anyBoxesChecked = false;
+            $('#checkboxForm input[type=checkbox]').each(function() {
+                if ($(this).is(":checked")) {
+                    anyBoxesChecked = true;
+                }
+            });
+         
+            if (anyBoxesChecked == false) {
+              return false;
+            }
+            return true;
+        }
+
+        var settingsLocal = jQuery.extend(true, {}, settings);
+        var user;
+
+        Oidc.Log.logger = console;
+
+        
+        function updateManager(response, scope) {
+            settingsLocal.response_type = response;
+            settingsLocal.scope = scope;
+
+            manager = new Oidc.UserManager(settingsLocal);
+
+            Oidc.Log.logger = console;
+
+            manager.events.addUserLoaded(function (loadedUser) {
+                user = loadedUser;
+                display('.js-user', user);
+                
+                $('#scopeList').show();
+                $('#logout').show();
+                $('#login').hide();
+            });
+
+            manager.events.addSilentRenewError(function (error) {
+                console.error('error while renewing the access token', error);
+            });
+
+            manager.events.addUserSignedOut(function () {
+                alert('The user has signed out');
+            });
+
+        }
+
+        $('.js-login').on('click', function () {
+            var response_type = "code";
+            var scope = "openid";
+            updateManager(response_type, scope);
+            manager.signinPopup().catch(function (error) {
+                console.error('error while logging in through the popup', error);
+            });
+        });
+
+        $('.js-create').on('click', function () {
+            var response_type = settings.response_type;
+            var scope = $('.Checkbox:checked').map(function() {return this.value;}).get().join(' ');
+            var checkTest = checkChecked();
+            if(!checkTest) {
+              alert('Please select at least one checkbox');
+            }else{
+                updateManager(response_type, scope);
+                manager.signinPopup().catch(function (error) {
+                    console.error('error while logging in through the popup', error);
+                });
+            }
+        });
+
+        $('.js-logout').on('click', function () {
+            manager.signoutRedirect().catch(function (error) {
+                console.error('error while signing out user', error);
+            });
+        });
+    </script>
+</body>
+</html>
